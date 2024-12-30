@@ -3,6 +3,7 @@ package internal
 import "math"
 
 type HitRecord struct {
+	Material  Material
 	P         *Vec3
 	N         *Vec3
 	T         float64
@@ -14,14 +15,16 @@ type Hittable interface {
 }
 
 type Sphere struct {
-	Center *Vec3
-	Radius float64
+	Center   *Vec3
+	Material Material
+	Radius   float64
 }
 
-func NewSphere(center *Vec3, radius float64) *Sphere {
+func NewSphere(center *Vec3, radius float64, material Material) *Sphere {
 	return &Sphere{
-		Center: center,
-		Radius: radius,
+		Center:   center,
+		Radius:   radius,
+		Material: material,
 	}
 }
 
@@ -50,9 +53,10 @@ func (s *Sphere) Hit(ray *Ray, rayT *Interval) (bool, HitRecord) {
 		outwardNormal := P.Sub(s.Center).Div(s.Radius)
 
 		hit := HitRecord{
-			P: P,
-			T: T,
-			N: N,
+			P:        P,
+			T:        T,
+			N:        N,
+			Material: s.Material,
 		}
 		hit.SetFaceNormal(ray, outwardNormal)
 		return true, hit

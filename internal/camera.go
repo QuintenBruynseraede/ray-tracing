@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	VIEWPORT_HEIGHT     = 2.0
 	CAMERA_FOCAL_LENGTH = 1.0
 	SAMPLES_PER_PIXEL   = 10
 	SAMPLE_SCALE        = 1.0 / SAMPLES_PER_PIXEL
+	MAX_DEPTH           = 50
+	FOV                 = 100
 )
 
 type Camera struct {
@@ -19,12 +20,17 @@ type Camera struct {
 	Viewport    Viewport
 	imageWidth  int
 	imageHeight int
+	maxDepth    int
+	fov         int
 }
 
 func NewCamera(center *Vec3, imageWidth, imageHeight int) Camera {
-	viewPortWidth := VIEWPORT_HEIGHT * (float64(imageWidth) / float64(imageHeight))
+	theta := DegToRad(FOV)
+	h := math.Tan(theta / 2)
+	viewportHeight := 2 * h * CAMERA_FOCAL_LENGTH
+	viewPortWidth := viewportHeight * (float64(imageWidth) / float64(imageHeight))
 	viewportU := NewVec3(viewPortWidth, 0, 0)
-	viewportV := NewVec3(0, -VIEWPORT_HEIGHT, 0)
+	viewportV := NewVec3(0, -viewportHeight, 0)
 
 	// Calculate horizontal and vertical delta vectors from pixel to pixel
 	pixelDeltaU := viewportU.Div(float64(imageWidth))
@@ -54,6 +60,7 @@ func NewCamera(center *Vec3, imageWidth, imageHeight int) Camera {
 		Viewport:    viewport,
 		imageWidth:  imageWidth,
 		imageHeight: imageHeight,
+		maxDepth:    MAX_DEPTH,
 	}
 }
 
@@ -63,7 +70,7 @@ func (c *Camera) Render(image *image.RGBA, world *HittableList) *image.RGBA {
 			// Use normal ints for intermediate color samples to allow values > 255
 			r, g, b := 0, 0, 0
 			for sample := 0; sample < SAMPLES_PER_PIXEL; sample++ {
-				sampleColor := c.rayColor(c.getRay(x, y), world)
+				sampleColor := c.rayColor(c.getRay(x, y), c.maxDepth, world)
 				r += int(sampleColor.R)
 				g += int(sampleColor.G)
 				b += int(sampleColor.B)
@@ -73,6 +80,7 @@ func (c *Camera) Render(image *image.RGBA, world *HittableList) *image.RGBA {
 				G: uint8(float64(g) * SAMPLE_SCALE),
 				B: uint8(float64(b) * SAMPLE_SCALE),
 			}
+			// correctedColor := GammaCorrect(pixelColor)
 			image.Set(x, y, pixelColor)
 		}
 	}
@@ -91,18 +99,23 @@ func sampleSquare() (float64, float64) {
 	return rand.Float64() - 0.5, rand.Float64() - 0.5
 }
 
-func (c *Camera) rayColor(ray *Ray, world *HittableList) color.RGBA {
-	intensity := Interval{Min: 0, Max: 0.999}
-	hit, hitRecord := world.Hit(ray, &Interval{0, math.MaxFloat64})
+func (c *Camera) rayColor(ray *Ray, depth int, world *HittableList) color.RGBA {
+	if depth <= 0 {
+		return color.RGBA{}
+	}
+
+	hit, hitRecord := world.Hit(ray, &Interval{0.001, math.MaxFloat64})
 
 	if hit {
-		N := hitRecord.N.Normalize()
-		return color.RGBA{
-			R: uint8(intensity.Clamp((N.X+1)/2) * 255),
-			G: uint8(intensity.Clamp((N.Y+1)/2) * 255),
-			B: uint8(intensity.Clamp((N.Z+1)/2) * 255),
-			A: 255,
+		scatter, scatterCol, scatterRay := hitRecord.Material.scatter(ray, hitRecord)
+		if scatter {
+			// Combine material color and scattered ray
+			return MultiplyColorValues(scatterCol, c.rayColor(scatterRay, depth-1, world))
 		}
+
+		dir := hitRecord.N.Add(RandomUnitVec3()) // Lambertian
+		nextBounceColor := c.rayColor(NewRay(hitRecord.P, dir), depth-1, world)
+		return MultiplyColor(nextBounceColor, 0.5)
 	}
 
 	// Sky

@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"log"
+	"math"
 	"os"
 	"time"
 )
@@ -64,4 +65,29 @@ func MultiplyColor(a color.RGBA, x float64) color.RGBA {
 		B: uint8(float64(a.B) * x),
 		A: a.A,
 	}
+}
+
+// To be consistent with book where colors are in [0,1)
+// This functions expects a to be an "attenuation color" used to attenuate b.
+// Therefore we rescale a to [0,1) and use it to multiply b.
+func MultiplyColorValues(a color.RGBA, b color.RGBA) color.RGBA {
+	return color.RGBA{
+		R: uint8(float64(a.R) / 255.0 * float64(b.R)),
+		G: uint8(float64(a.G) / 255.0 * float64(b.G)),
+		B: uint8(float64(a.B) / 255.0 * float64(b.B)),
+		A: a.A,
+	}
+}
+
+func GammaCorrect(col color.RGBA) color.RGBA {
+	return color.RGBA{
+		R: uint8(math.Max(0, math.Sqrt(float64(col.R)))),
+		G: uint8(math.Max(0, math.Sqrt(float64(col.G)))),
+		B: uint8(math.Max(0, math.Sqrt(float64(col.B)))),
+		A: col.A,
+	}
+}
+
+func DegToRad(deg float64) float64 {
+	return deg * math.Pi / 180
 }
