@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	SAMPLES_PER_PIXEL = 5
+	SAMPLES_PER_PIXEL = 500
 	SAMPLE_SCALE      = 1.0 / SAMPLES_PER_PIXEL
 	MAX_DEPTH         = 50
 )
