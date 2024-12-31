@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	"image"
-	"image/color"
 	"log"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/quintenbruynseraede/ray-tracing/internal"
+	"github.com/quintenbruynseraede/ray-tracing/internal/scenes"
 )
 
 const (
@@ -36,24 +36,7 @@ type Game struct {
 }
 
 func NewGame() *Game {
-	camera := internal.NewCamera(internal.NewVec3(0, 0, 0), IMAGE_WIDTH, IMAGE_HEIGHT)
-
-	material_ground := internal.Lambertian{Albedo: color.RGBA{204, 204, 0, 255}}
-	material_center := internal.Lambertian{Albedo: color.RGBA{25, 50, 128, 255}}
-	material_left := internal.Dielectric{RefractionIndex: 1.5}
-	material_bubble := internal.Dielectric{RefractionIndex: 1.0 / 1.5}
-	material_right := internal.Metal{
-		Albedo: color.RGBA{205, 153, 50, 255},
-		Fuzz:   1.0,
-	}
-
-	world := internal.NewHittableList(
-		internal.NewSphere(internal.NewVec3(0, -100.5, -1.0), 100, material_ground),
-		internal.NewSphere(internal.NewVec3(0, 0, -1.2), 0.5, material_center),
-		internal.NewSphere(internal.NewVec3(-1, 0, -1), 0.5, material_left),
-		internal.NewSphere(internal.NewVec3(-1, 0, -1), 0.4, material_bubble),
-		internal.NewSphere(internal.NewVec3(1, 0, -1), 0.5, material_right),
-	)
+	camera, world := scenes.LoadPart1FinalRender()
 
 	return &Game{
 		Image:  image.NewRGBA(image.Rect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT)),

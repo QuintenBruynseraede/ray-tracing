@@ -55,6 +55,15 @@ func RandomOnHemisphere(normal *Vec3) *Vec3 {
 	}
 }
 
+func RandomInUnitDisk() *Vec3 {
+	for {
+		p := NewVec3(-1+rand.Float64()*2, -1+rand.Float64()*2, 0)
+		if p.LengthSquared() < 1 {
+			return p
+		}
+	}
+}
+
 // Returns the reflection of v against a surface with normal n
 func Reflect(v *Vec3, n *Vec3) *Vec3 {
 	return v.Sub(n.Mul(v.Dot(n)).Mul(2.0))

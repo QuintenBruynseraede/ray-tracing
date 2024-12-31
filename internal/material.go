@@ -1,20 +1,19 @@
 package internal
 
 import (
-	"image/color"
 	"math"
 	"math/rand/v2"
 )
 
 type Material interface {
-	scatter(rayIn *Ray, hit HitRecord) (bool, color.RGBA, *Ray)
+	scatter(rayIn *Ray, hit HitRecord) (bool, Color, *Ray)
 }
 
 type Lambertian struct {
-	Albedo color.RGBA
+	Albedo Color
 }
 
-func (l Lambertian) scatter(rayIn *Ray, hit HitRecord) (bool, color.RGBA, *Ray) {
+func (l Lambertian) scatter(rayIn *Ray, hit HitRecord) (bool, Color, *Ray) {
 	scatterDirection := hit.N.Add(RandomUnitVec3())
 	if scatterDirection.NearZero() {
 		scatterDirection = hit.N // Prevent edge cases later on
@@ -23,11 +22,11 @@ func (l Lambertian) scatter(rayIn *Ray, hit HitRecord) (bool, color.RGBA, *Ray) 
 }
 
 type Metal struct {
-	Albedo color.RGBA
+	Albedo Color
 	Fuzz   float64
 }
 
-func (m Metal) scatter(rayIn *Ray, hit HitRecord) (bool, color.RGBA, *Ray) {
+func (m Metal) scatter(rayIn *Ray, hit HitRecord) (bool, Color, *Ray) {
 	reflected := Reflect(rayIn.Direction, hit.N)
 	reflected = reflected.Normalize().Add(RandomUnitVec3().Mul(m.Fuzz))
 
@@ -35,7 +34,7 @@ func (m Metal) scatter(rayIn *Ray, hit HitRecord) (bool, color.RGBA, *Ray) {
 	if scattered.Direction.Dot(hit.N) > 0 {
 		return true, m.Albedo, scattered
 	} else {
-		return false, color.RGBA{}, nil
+		return false, C(0, 0, 0), nil
 	}
 }
 
@@ -43,7 +42,7 @@ type Dielectric struct {
 	RefractionIndex float64
 }
 
-func (d Dielectric) scatter(rayIn *Ray, hit HitRecord) (bool, color.RGBA, *Ray) {
+func (d Dielectric) scatter(rayIn *Ray, hit HitRecord) (bool, Color, *Ray) {
 	var ri float64
 	if hit.FrontFace {
 		ri = 1.0 / d.RefractionIndex
@@ -63,7 +62,7 @@ func (d Dielectric) scatter(rayIn *Ray, hit HitRecord) (bool, color.RGBA, *Ray) 
 		direction = Refract(unitDirection, hit.N, ri)
 	}
 
-	return true, color.RGBA{255, 255, 255, 255}, NewRay(hit.P, direction)
+	return true, C(1, 1, 1), NewRay(hit.P, direction)
 }
 
 func (d Dielectric) reflectance(cos float64, ri float64) float64 {

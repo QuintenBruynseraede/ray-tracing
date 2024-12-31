@@ -5,40 +5,49 @@ import (
 	"image/color"
 	"math"
 	"math/rand/v2"
+	"sync"
 )
 
 const (
-	CAMERA_FOCAL_LENGTH = 1.0
-	SAMPLES_PER_PIXEL   = 10
-	SAMPLE_SCALE        = 1.0 / SAMPLES_PER_PIXEL
-	MAX_DEPTH           = 50
-	FOV                 = 100
+	SAMPLES_PER_PIXEL = 5
+	SAMPLE_SCALE      = 1.0 / SAMPLES_PER_PIXEL
+	MAX_DEPTH         = 50
 )
 
 type Camera struct {
-	Center      *Vec3
-	Viewport    Viewport
-	imageWidth  int
-	imageHeight int
-	maxDepth    int
-	fov         int
+	Center       *Vec3
+	u, v, w      *Vec3 // Camera frame basis vectors
+	defocusDiskU *Vec3
+	defocusDiskV *Vec3
+	Viewport     Viewport
+	imageWidth   int
+	imageHeight  int
+	maxDepth     int
+	fov          int
+	defocusAngle float64
 }
 
-func NewCamera(center *Vec3, imageWidth, imageHeight int) Camera {
-	theta := DegToRad(FOV)
+func NewCamera(imageWidth, imageHeight int, fov int, lookFrom, lookAt, vup *Vec3, defocusAngle, focusDist float64) Camera {
+	// Basis vectors
+	w := (lookFrom.Sub(lookAt)).Normalize()
+	u := vup.Cross(w).Normalize()
+	v := w.Cross(u)
+
+	// FOV
+	theta := DegToRad(float64(fov))
 	h := math.Tan(theta / 2)
-	viewportHeight := 2 * h * CAMERA_FOCAL_LENGTH
-	viewPortWidth := viewportHeight * (float64(imageWidth) / float64(imageHeight))
-	viewportU := NewVec3(viewPortWidth, 0, 0)
-	viewportV := NewVec3(0, -viewportHeight, 0)
+	viewportHeight := 2 * h * focusDist
+	viewportWidth := viewportHeight * (float64(imageWidth) / float64(imageHeight))
+	viewportU := u.Mul(viewportWidth)
+	viewportV := v.Mul(-1.0 * viewportHeight)
 
 	// Calculate horizontal and vertical delta vectors from pixel to pixel
 	pixelDeltaU := viewportU.Div(float64(imageWidth))
 	pixelDeltaV := viewportV.Div(float64(imageHeight))
 
 	// Calculate the location of the upper left pixel
-	viewportUpperLeft := (center.
-		Sub(NewVec3(0, 0, CAMERA_FOCAL_LENGTH)).
+	viewportUpperLeft := (lookFrom.
+		Sub(w.Mul(focusDist)).
 		Sub(viewportU.Div(2)).
 		Sub(viewportV.Div(2)))
 
@@ -46,6 +55,9 @@ func NewCamera(center *Vec3, imageWidth, imageHeight int) Camera {
 	pixel00Location := viewportUpperLeft.
 		Add(pixelDeltaU.Mul(0.5)).
 		Add(pixelDeltaV.Mul(0.5))
+
+	// Defocus basis vectors
+	defocusRadius := focusDist * math.Tan(DegToRad(defocusAngle/2))
 
 	viewport := Viewport{
 		U:               viewportU,
@@ -55,35 +67,63 @@ func NewCamera(center *Vec3, imageWidth, imageHeight int) Camera {
 		UpperLeft:       viewportUpperLeft,
 		Pixel00Location: pixel00Location,
 	}
+
 	return Camera{
-		Center:      center,
-		Viewport:    viewport,
-		imageWidth:  imageWidth,
-		imageHeight: imageHeight,
-		maxDepth:    MAX_DEPTH,
+		Center:       lookFrom,
+		Viewport:     viewport,
+		imageWidth:   imageWidth,
+		imageHeight:  imageHeight,
+		maxDepth:     MAX_DEPTH,
+		w:            w,
+		u:            u,
+		v:            v,
+		defocusDiskU: u.Mul(defocusRadius),
+		defocusDiskV: v.Mul(defocusRadius),
+		defocusAngle: defocusAngle,
 	}
 }
 
 func (c *Camera) Render(image *image.RGBA, world *HittableList) *image.RGBA {
+	imArray := make([][]Color, c.imageHeight)
+	for i := range imArray {
+		imArray[i] = make([]Color, c.imageWidth)
+	}
+
+	var wg sync.WaitGroup
+
 	for y := 0; y < c.imageHeight; y++ {
 		for x := 0; x < c.imageWidth; x++ {
-			// Use normal ints for intermediate color samples to allow values > 255
-			r, g, b := 0, 0, 0
-			for sample := 0; sample < SAMPLES_PER_PIXEL; sample++ {
-				sampleColor := c.rayColor(c.getRay(x, y), c.maxDepth, world)
-				r += int(sampleColor.R)
-				g += int(sampleColor.G)
-				b += int(sampleColor.B)
-			}
-			pixelColor := color.RGBA{
-				R: uint8(float64(r) * SAMPLE_SCALE),
-				G: uint8(float64(g) * SAMPLE_SCALE),
-				B: uint8(float64(b) * SAMPLE_SCALE),
-			}
-			// correctedColor := GammaCorrect(pixelColor)
-			image.Set(x, y, pixelColor)
+			wg.Add(1)
+			// One goroutine per pixel
+			go func(x, y int) {
+				defer wg.Done()
+
+				// Use normal ints for intermediate color samples to allow values > 255
+				// TODO: just use vector math here
+				r, g, b := 0.0, 0.0, 0.0
+				for sample := 0; sample < SAMPLES_PER_PIXEL; sample++ {
+					sampleColor := c.rayColor(c.getRay(x, y), c.maxDepth, world)
+					r += sampleColor.X
+					g += sampleColor.Y
+					b += sampleColor.Z
+				}
+				imArray[y][x] = C(r*SAMPLE_SCALE, g*SAMPLE_SCALE, b*SAMPLE_SCALE).Mul(255.0)
+			}(x, y)
 		}
 	}
+
+	wg.Wait()
+
+	for y := 0; y < c.imageHeight; y++ {
+		for x := 0; x < c.imageWidth; x++ {
+			image.Set(x, y, color.RGBA{
+				R: uint8(imArray[y][x].X),
+				G: uint8(imArray[y][x].Y),
+				B: uint8(imArray[y][x].Z),
+			})
+		}
+	}
+
 	return image
 }
 
@@ -99,9 +139,9 @@ func sampleSquare() (float64, float64) {
 	return rand.Float64() - 0.5, rand.Float64() - 0.5
 }
 
-func (c *Camera) rayColor(ray *Ray, depth int, world *HittableList) color.RGBA {
+func (c *Camera) rayColor(ray *Ray, depth int, world *HittableList) Color {
 	if depth <= 0 {
-		return color.RGBA{}
+		return C(0, 0, 0)
 	}
 
 	hit, hitRecord := world.Hit(ray, &Interval{0.001, math.MaxFloat64})
@@ -110,16 +150,28 @@ func (c *Camera) rayColor(ray *Ray, depth int, world *HittableList) color.RGBA {
 		scatter, scatterCol, scatterRay := hitRecord.Material.scatter(ray, hitRecord)
 		if scatter {
 			// Combine material color and scattered ray
-			return MultiplyColorValues(scatterCol, c.rayColor(scatterRay, depth-1, world))
+			return scatterCol.MulVec(c.rayColor(scatterRay, depth-1, world))
 		}
 
+		var origin *Vec3
+		if c.defocusAngle <= 0 {
+			origin = c.Center
+		} else {
+			origin = c.defocusDiskSample()
+		}
 		dir := hitRecord.N.Add(RandomUnitVec3()) // Lambertian
-		nextBounceColor := c.rayColor(NewRay(hitRecord.P, dir), depth-1, world)
-		return MultiplyColor(nextBounceColor, 0.5)
+		nextBounceColor := c.rayColor(NewRay(origin, dir), depth-1, world)
+		return nextBounceColor.Mul(0.5)
 	}
 
 	// Sky
-	return color.RGBA{R: 135, G: 206, B: 240, A: 255}
+	return C(0.53, 0.81, 0.94)
+}
+
+// defocusDiskSample returns a random point in the camera defocus disk
+func (c *Camera) defocusDiskSample() *Vec3 {
+	p := RandomInUnitDisk()
+	return c.Center.Add(c.defocusDiskU.Mul(p.X)).Add(c.defocusDiskV.Mul(p.Y))
 }
 
 type Viewport struct {
@@ -129,4 +181,5 @@ type Viewport struct {
 	PixelDeltaV     *Vec3
 	UpperLeft       *Vec3
 	Pixel00Location *Vec3
+	FocalLength     float64
 }
