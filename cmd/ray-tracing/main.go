@@ -36,7 +36,7 @@ type Game struct {
 }
 
 func NewGame() *Game {
-	camera, world := scenes.LoadPart1FinalRender()
+	camera, world := scenes.LoadCircleScene()
 
 	return &Game{
 		Image:  image.NewRGBA(image.Rect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT)),
