@@ -11,7 +11,7 @@ import (
 const (
 	SAMPLES_PER_PIXEL = 500
 	SAMPLE_SCALE      = 1.0 / SAMPLES_PER_PIXEL
-	MAX_DEPTH         = 50
+	MAX_DEPTH         = 500
 )
 
 type Camera struct {
@@ -132,7 +132,14 @@ func (c *Camera) getRay(x, y int) *Ray {
 	pixelSample := c.Viewport.Pixel00Location.
 		Add(c.Viewport.PixelDeltaU.Mul(float64(x) + offsetX)).
 		Add(c.Viewport.PixelDeltaV.Mul(float64(y) + offsetY))
-	return NewRay(c.Center, pixelSample.Sub(c.Center))
+
+	var rayOrigin *Vec3
+	if c.defocusAngle <= 0 {
+		rayOrigin = c.Center
+	} else {
+		rayOrigin = c.defocusDiskSample()
+	}
+	return NewRay(rayOrigin, pixelSample.Sub(rayOrigin))
 }
 
 func sampleSquare() (float64, float64) {
@@ -171,7 +178,9 @@ func (c *Camera) rayColor(ray *Ray, depth int, world *HittableList) Color {
 // defocusDiskSample returns a random point in the camera defocus disk
 func (c *Camera) defocusDiskSample() *Vec3 {
 	p := RandomInUnitDisk()
-	return c.Center.Add(c.defocusDiskU.Mul(p.X)).Add(c.defocusDiskV.Mul(p.Y))
+	return c.Center.
+		Add(c.defocusDiskU.Mul(p.X)).
+		Add(c.defocusDiskV.Mul(p.Y))
 }
 
 type Viewport struct {

@@ -50,7 +50,7 @@ func LoadPart1FinalRender() (Camera, *HittableList) {
 		NewVec3(0, -2, 0),
 		NewVec3(0, 1, 0),
 		0.6,
-		10.0,
+		8.0,
 	)
 
 	return camera, world

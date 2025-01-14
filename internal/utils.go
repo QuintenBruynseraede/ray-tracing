@@ -37,5 +37,5 @@ func SaveScreenshot(image *image.RGBA) {
 }
 
 func DegToRad(deg float64) float64 {
-	return deg * math.Pi / 180
+	return deg * math.Pi / 180.0
 }
