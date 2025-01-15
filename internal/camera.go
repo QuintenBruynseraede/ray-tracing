@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	SAMPLES_PER_PIXEL = 50
+	SAMPLES_PER_PIXEL = 600
 	SAMPLE_SCALE      = 1.0 / SAMPLES_PER_PIXEL
 	MAX_DEPTH         = 500
 )
@@ -172,7 +172,7 @@ func (c *Camera) rayColor(ray *Ray, depth int, world *HittableList) Color {
 	}
 
 	// Sky
-	return C(0.53, 0.81, 0.94)
+	return C(182.0/255.0, 230.0/255.0, 252.0/255.0)
 }
 
 // defocusDiskSample returns a random point in the camera defocus disk

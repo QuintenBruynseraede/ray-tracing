@@ -49,7 +49,7 @@ func LoadPart1FinalRender() (Camera, *HittableList) {
 		NewVec3(13, 1.5, 3),
 		NewVec3(0, -2, 0),
 		NewVec3(0, 1, 0),
-		0.3,
+		0.15,
 		8.0,
 	)
 
